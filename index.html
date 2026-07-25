@@ -65,9 +65,10 @@
               'Scanning for MyiphoneBLE...';
 
             // 1. Request BLE Device
+            // Replace your requestDevice block with this:
             const device = await navigator.bluetooth.requestDevice({
-              filters: [{ name: 'MyiphoneBLE' }],
-              optionalServices: [SERVICE_UUID],
+              acceptAllDevices: true,
+              optionalServices: [SERVICE_UUID] // Must list your UUID here so iOS unlocks it!
             });
 
             // 2. Connect to C# GATT Server
