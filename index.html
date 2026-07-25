@@ -1,128 +1,106 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BLE Offline Image Receiver</title>
-    <style>
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        text-align: center;
-        padding: 20px;
-        background-color: #f4f4f9;
-        color: #333;
-      }
-      button {
-        background-color: #007aff;
-        color: white;
-        border: none;
-        padding: 14px 28px;
-        font-size: 16px;
-        font-weight: bold;
-        border-radius: 12px;
-        cursor: pointer;
-        margin-bottom: 20px;
-      }
-      #status {
-        font-weight: 600;
-        color: #555;
-      }
-      #progress {
-        color: #888;
-        margin-bottom: 20px;
-      }
-      img {
-        max-width: 90%;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        margin-top: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <h2>BLE Image Receiver</h2>
-    <button id="connectBtn">Connect to Windows BLE</button>
-    <p id="status">Status: Offline & Ready</p>
-    <p id="progress">Received: 0 bytes</p>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLE Offline Image Receiver</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+    button {
+      background-color: #007aff;
+      color: white;
+      border: none;
+      padding: 16px 28px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 10px rgba(0, 122, 255, 0.3);
+    }
+    #status { font-weight: 600; color: #555; }
+    #progress { color: #888; margin-bottom: 20px; }
+    img {
+      max-width: 90%;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
 
-    <!-- The received image will be rendered inside this tag -->
-    <img id="imageContainer" alt="Awaiting image..." />
+  <h2>BLE Image Receiver</h2>
+  <button id="connectBtn">Connect to Windows BLE</button>
+  <p id="status">Status: Disconnected</p>
+  <p id="progress">Received: 0 bytes</p>
 
-    <script>
-      // MATCH THESE TO YOUR C# SERVICE AND CHARACTERISTIC GUIDs
-      const SERVICE_UUID = '00001111-0000-1000-8000-00805f9b34fb';
-      const CHAR_UUID = '00002222-0000-1000-8000-00805f9b34fb';
+  <img id="imageContainer" alt="Awaiting image transmission..." />
 
-      let receivedChunks = [];
-      let totalBytesReceived = 0;
+  <script>
+    const SERVICE_UUID = "00001111-0000-1000-8000-00805f9b34fb";
+    const CHAR_UUID    = "00002222-0000-1000-8000-00805f9b34fb";
 
-      document
-        .getElementById('connectBtn')
-        .addEventListener('click', async () => {
-          try {
-            document.getElementById('status').innerText =
-              'Scanning for MyiphoneBLE...';
+    let receivedChunks = [];
+    let totalBytesReceived = 0;
 
-            // 1. Request BLE Device
-            // Replace your requestDevice block with this:
-            const device = await navigator.bluetooth.requestDevice({
-              acceptAllDevices: true,
-              optionalServices: [SERVICE_UUID] // Must list your UUID here so iOS unlocks it!
-            });
-
-            // 2. Connect to C# GATT Server
-            const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(SERVICE_UUID);
-            const characteristic = await service.getCharacteristic(CHAR_UUID);
-
-            document.getElementById('status').innerText =
-              'Connected! Send image from C# app.';
-
-            // Reset buffer for new transfers
-            receivedChunks = [];
-            totalBytesReceived = 0;
-
-            // 3. Listen for incoming Bluetooth chunks
-            await characteristic.startNotifications();
-            characteristic.addEventListener(
-              'characteristicvaluechanged',
-              (event) => {
-                const chunk = new Uint8Array(event.target.value.buffer);
-
-                receivedChunks.push(chunk);
-                totalBytesReceived += chunk.length;
-
-                document.getElementById('progress').innerText =
-                  `Received: ${totalBytesReceived} bytes`;
-
-                // Live reconstruction: Reassemble and decode image on screen
-                reconstructAndDecodeImage();
-              },
-            );
-          } catch (err) {
-            document.getElementById('status').innerText =
-              'Error: ' + err.message;
-          }
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      try {
+        document.getElementById('status').innerText = "Scanning for nearby BLE devices...";
+        
+        // Scan for ALL devices to bypass iOS name filter restrictions
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SERVICE_UUID]
         });
 
-      function reconstructAndDecodeImage() {
-        // Step 1: Allocate a continuous byte buffer
-        let combinedBytes = new Uint8Array(totalBytesReceived);
-        let offset = 0;
+        document.getElementById('status').innerText = `Connecting to ${device.name || "Device"}...`;
 
-        for (let chunk of receivedChunks) {
-          combinedBytes.set(chunk, offset);
-          offset += chunk.length;
-        }
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        const characteristic = await service.getCharacteristic(CHAR_UUID);
 
-        // Step 2: Convert binary byte buffer into a JPG image Blob
-        let imageBlob = new Blob([combinedBytes], { type: 'image/jpeg' });
+        document.getElementById('status').innerText = "Connected! Waiting for C# app to send image...";
 
-        // Step 3: Set as the source for the <img> tag
-        let imageObjectURL = URL.createObjectURL(imageBlob);
-        document.getElementById('imageContainer').src = imageObjectURL;
+        receivedChunks = [];
+        totalBytesReceived = 0;
+
+        await characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', (event) => {
+          const chunk = new Uint8Array(event.target.value.buffer);
+          
+          receivedChunks.push(chunk);
+          totalBytesReceived += chunk.length;
+
+          document.getElementById('progress').innerText = `Received: ${totalBytesReceived} bytes`;
+
+          reconstructAndDecodeImage();
+        });
+
+      } catch (err) {
+        document.getElementById('status').innerText = "Error: " + err.message;
       }
-    </script>
-  </body>
+    });
+
+    function reconstructAndDecodeImage() {
+      let combinedBytes = new Uint8Array(totalBytesReceived);
+      let offset = 0;
+
+      for (let chunk of receivedChunks) {
+        combinedBytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      let imageBlob = new Blob([combinedBytes], { type: 'image/jpeg' });
+      let imageObjectURL = URL.createObjectURL(imageBlob);
+      document.getElementById('imageContainer').src = imageObjectURL;
+    }
+  </script>
+</body>
 </html>
